@@ -234,7 +234,7 @@
       border: 1px solid var(--paper-line);
       border-radius: var(--radius);
       padding: 22px 20px 34px 20px;
-      overflow: visible;
+      overflow: hidden;
     }
 
     .strip-track {
@@ -343,9 +343,19 @@
 
     .stats {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      grid-template-columns: repeat(3, 1fr);
       gap: 12px;
       margin-bottom: 34px;
+    }
+    @media (max-width: 720px) {
+      .stats {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (max-width: 480px) {
+      .stats {
+        grid-template-columns: 1fr;
+      }
     }
 
     .stat {
@@ -639,10 +649,11 @@
     <div class="period-bar">
       <span class="period-label">Periode</span>
       <div class="period-presets" id="periodPresets">
-        <button class="btn ghost" data-mode="all">Semua</button>
+        <button class="btn ghost" data-mode="1d">24 Jam</button>
         <button class="btn ghost" data-mode="3d">3 Hari</button>
         <button class="btn ghost" data-mode="7d">7 Hari</button>
         <button class="btn ghost" data-mode="30d">30 Hari</button>
+        <button class="btn ghost" data-mode="all">Semua</button>
       </div>
       <div class="period-dates">
         dari <input type="date" id="dateFrom"> sampai <input type="date" id="dateTo">
@@ -751,14 +762,11 @@
           <div class="chart-box"><canvas id="growthChartLfa"></canvas></div>
         </div>
 
-        <div class="growth-current" id="growthCurrent"
-          style="grid-column: 1 / -1; display: flex; gap: 16px; flex-wrap: wrap; flex-direction: row;"></div>
-
-        <div style="grid-column: 1 / -1; text-align: center; margin-top: 10px;">
+        <div style="grid-column: 1 / -1; text-align: center; margin-top: 10px; margin-bottom: 10px;">
           <button class="btn ghost" id="expandGrowthBtn">Lihat Seluruh Grafik Pertumbuhan</button>
         </div>
 
-        <div id="expandedGrowth" style="display: none; grid-column: 1 / -1; grid-template-columns: 1fr 1fr; gap: 16px;">
+        <div id="expandedGrowth" style="display: none; grid-column: 1 / -1; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
           <div class="chart-card" style="width: 100%;">
             <div class="chart-title"
               style="font-family:var(--font-mono); font-size:11px; font-weight:bold; margin-bottom:8px;">Lingkar Kepala
@@ -778,6 +786,9 @@
             <div class="chart-box"><canvas id="growthChartBmifa"></canvas></div>
           </div>
         </div>
+
+        <div class="growth-current" id="growthCurrent"
+          style="grid-column: 1 / -1; display: flex; gap: 16px; flex-wrap: wrap; flex-direction: row;"></div>
       </div>
     </div>
 
@@ -1024,14 +1035,25 @@
     function setPeriodMode(mode) {
       const bounds = fullDataBounds(CURRENT_RAW);
       if (!bounds) { periodState = { mode: 'all', from: null, to: null }; }
-      else if (mode === 'all') {
-        periodState = { mode: 'all', from: bounds.min, to: bounds.max };
-      } else {
-        const days = mode === '3d' ? 3 : mode === '7d' ? 7 : 30;
-        const to = new Date(bounds.max);
-        const from = new Date(to.getTime() - (days - 1) * 86400000);
-        from.setHours(0, 0, 0, 0);
-        periodState = { mode, from, to };
+      else {
+        if (mode === 'default') {
+          const daysSpan = (bounds.max - bounds.min) / 86400000;
+          mode = daysSpan > 30 ? 'all' : '1d';
+        }
+        if (mode === 'all') {
+          periodState = { mode: 'all', from: bounds.min, to: bounds.max };
+        } else {
+          const to = new Date(bounds.max);
+          let from;
+          if (mode === '1d') {
+            from = new Date(to.getTime() - 24 * 3600000);
+          } else {
+            const days = mode === '3d' ? 3 : mode === '7d' ? 7 : 30;
+            from = new Date(to.getTime() - (days - 1) * 86400000);
+            from.setHours(0, 0, 0, 0);
+          }
+          periodState = { mode, from, to };
+        }
       }
       document.querySelectorAll('#periodPresets .btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
       if (periodState.from) document.getElementById('dateFrom').value = toDateInputVal(periodState.from);
@@ -1057,7 +1079,11 @@
 
     function renderDashboard(fullRaw, RAW) {
       destroyCharts();
-      document.getElementById('stripTrack').querySelectorAll('.night-band,.sleep-block,.tick,.tick-dot,.day-label,.day-tick').forEach(el => el.remove());
+      // Hapus semua elemen dinamis di strip track kecuali baseline
+      const stripTrackEl = document.getElementById('stripTrack');
+      Array.from(stripTrackEl.children).forEach(el => {
+        if (!el.classList.contains('strip-baseline')) el.remove();
+      });
 
       const babyName = (fullRaw.profile && fullRaw.profile.name) || 'Bayi';
       const nicknameMatch = babyName.match(/\(([^)]+)\)/);
@@ -1679,7 +1705,7 @@
     }
     document.getElementById('refreshRemote').addEventListener('click', function () { loadRemoteData(true); });
 
-    setPeriodMode('all');
+    setPeriodMode('default');
     loadRemoteData(false);
   </script>
 </body>
